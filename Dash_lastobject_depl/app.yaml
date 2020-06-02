@@ -1,0 +1,59 @@
+# runtime: python
+# service: default
+# env: flex
+# # threadsafe: false
+# runtime_config:
+#     python_version: 3
+# instance_class: B2
+# manual_scaling:
+#   instances: 5
+# entrypoint: gunicorn -b :$PORT main:app
+# # resources:
+# #   cpu: 4
+# #   memory_gb: 12
+# #   disk_size_gb: 12
+# #   volumes:
+# #   - name: ramdisk1
+# #     volume_type: tmpfs
+# #     size_gb: 3
+
+# readiness_check:
+#   path: "/readiness_check"
+#   check_interval_sec: 410
+#   timeout_sec: 400
+#   # failure_threshold: 2
+#   # success_threshold: 2
+#   app_start_timeout_sec: 600
+# liveness_check:
+#   initial_delay_sec: 300
+#   check_interval_sec: 200
+#   timeout_sec: 200
+#   failure_threshold: 4
+#   success_threshold: 2
+
+
+
+service: default
+runtime: python37
+instance_class: F2
+
+resources:
+    cpu: 1
+    memory_gb: 2
+    disk_size_gb: 10
+
+entrypoint: gunicorn -b :$PORT main:server
+
+readiness_check:
+  path: "/readiness_check"
+  check_interval_sec: 65
+  timeout_sec: 60
+  # failure_threshold: 2
+  # success_threshold: 2
+  app_start_timeout_sec: 60
+liveness_check:
+  initial_delay_sec: 60
+  check_interval_sec: 60
+  timeout_sec: 60
+  failure_threshold: 4
+  success_threshold: 2
