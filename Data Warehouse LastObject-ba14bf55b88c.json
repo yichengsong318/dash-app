@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "data-warehouse-lastobject",
+  "private_key_id": "ba14bf55b88c9f30db3fa5ec5fda23029f56c337",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDBp6Uxp8k6efzA\nO69Wr+1b7uCBZAbQ6KbapSgbAiXWnmASH1tvOykyya9aOO9mzRar+KEppe2Ymox3\niiGPBe3LvCNJfaIaTqSBeEZhgn6nLZ3lx4dEs2jBQDZutdl+a2sJxdlmLlNKeyJz\nKPWIxL+7lCLDL9wwBski7viu/lczGRvMGeBawr7H4WKp0mBNIHCK+mK/R8HkZQAj\nYTOeOIMZd7OBGuPxpASFTsPlQL3cPUJpJPDW98yeBEu1DRIj0A9xwyzYLYZOOvZ5\nWHIhJxbgBW63x4fOLf4umlcPqPXCN7DFmYZ3PKCrqtiiL4IjJorA7TkMpBdE+7eL\na8C/1KPDAgMBAAECggEAPOzr5XfmsL2RPb9pVgoKUJqSSlL4bABOAkrkl76wvdlc\n20a/QvrnZsGaJ/Xyp7KNV/Rka9B2tESnPbKZBUC1xBvANE5Q0hr82XjIF8Rw6VLK\nMvD3xy70nZwApAsVTpcn+U6kK2gWrz+XIoj32pwfwDmGSEdF7FwuKo3pclC1iW7n\n8UsCUpd051GjNUJpQIjDl0gmdew1Q4kT49qvHb24eZc7LUtpTNcuqeCUNFoRP58v\nHar/WmsY22UL3dLLCfsuWVQuuvzU2pd9tPGYWUQim8BVw4SVdIISsZlRNMZ5AvoY\nl9vsWVbynWCE1RNZh9pBGjtg+KJIL4nnwkIQt57wCQKBgQDtjf5C7lCowsB61bz7\nP9hoTY0vndVLD/qzl5wX7GVS2GKo2IWYHnMcDlH2aStKpZqMMkAVDjpcj3wQRMMU\nsmW+485KVNQd5IJM0AQWFUwnbqEk4MwoRXI8Pflkbgy1xhZK+cHo5gSvqXwDKH+0\nn8EFM4exbWVrR4Ek0Qe7SjBOSQKBgQDQsQgCMnWUyMk96PwHVIMQCviUQRGUXU3R\nSvhBo5LIqdPXerRwzZEZ6shbOIZXcuXMgl6g5vLl0qz3zcxkIF3s8l7xHLrelvk3\nWQswMDpqiwmreZ8XYiZ29ReV3R5BMjHarm2vfiTQqrwzQ8+xKjovH95o5f6TiGT7\n87L4D3GRqwKBgQCbr66OoO892v0Yw9Gp/ErQ+Npp9Y/fNObCIr+LMkOpiuUF8XmE\nm5gnL/9pdb2Im4XxEdHLutpm5SaS5u3PN6fU9imxr2yg9qyquL2k12pkgW2c5LMI\nRZM7hgZXWoR78QmVM6BxCabSlUoQK8+eSgDPbtkkYCTSrTcnMNNXXKTR+QKBgGo4\nQRhFMJ27GNrfFDBy7oai3uUuvVDjsLD/VJ6sMBDch8ucU+06ZElpu/LaMV6fR6Gx\nFZMWGbmqYol6gTbRVp08u+BDPEYBV/W4573uPj1uaUyTCcuwFF3l38xSkIykjMV+\nlKuHLBvdWw9Iy5SkJptHwD9qGQpkmOm4n3Ys/iQjAoGBAOe2L6GT+5K4wpXoGEIr\n7GluK26Di25BgZ2RyVM6B0umT8mC3XIokSMG+BkhwmMOhxA43l/4EXzJj9eamHgf\nbd0eCeaBoZMxzkBzosRxK2gb3ay9khJDiceMpk7zCZiPrlsnalOC1X2uaacRWxKm\nAMCFGMMDIhj9h8XgzWrd72IP\n-----END PRIVATE KEY-----\n",
+  "client_email": "stitch@data-warehouse-lastobject.iam.gserviceaccount.com",
+  "client_id": "101056697244290264373",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/stitch%40data-warehouse-lastobject.iam.gserviceaccount.com"
+}
