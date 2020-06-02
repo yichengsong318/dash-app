@@ -1,4 +1,4 @@
-# Dash_GCP
+# LastObject Dashboard
 
 Folder structure
 
