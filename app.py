@@ -20,10 +20,20 @@ with open('creds_dash.json') as json_data:
 VALID_USERNAME_PASSWORD_PAIRS = creds
 
 # reading data from bigQuery
+SCOPES = ['https://www.googleapis.com/auth/drive','https://www.googleapis.com/auth/bigquery']
 credentials = service_account.Credentials.from_service_account_file(
-    'Data Warehouse LastObject-ba14bf55b88c.json')
+    'Data Warehouse LastObject-ba14bf55b88c.json',scopes = SCOPES)
 
 client = bigquery.Client(credentials= credentials,project='data-warehouse-lastobject')
+
+#read wages table
+QUERY = (
+    'select * from `OPEX_2_0.wages`;')
+query_job = client.query(QUERY)  # API request
+wages = query_job.result()  # Waits for query to finish
+wages = wages.to_dataframe()
+wages['Date'] = pd.to_datetime(wages['Date'])
+print(wages.info())
 
 # reading orders table
 QUERY = (
