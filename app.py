@@ -32,7 +32,7 @@ QUERY = (
 query_job = client.query(QUERY)  # API request
 wages = query_job.result()  # Waits for query to finish
 wages = wages.to_dataframe()
-wages['Date'] = pd.to_datetime(wages['Date'])
+# wages['Date'] = pd.to_datetime(wages['Date'])
 print(wages.info())
 
 # reading orders table
@@ -41,7 +41,7 @@ QUERY = (
 query_job = client.query(QUERY)  # API request
 orders = query_job.result()  # Waits for query to finish
 orders = orders.to_dataframe()
-print(orders.head())
+# print(orders.head())
 
 
 
@@ -52,7 +52,51 @@ query_job = client.query(QUERY)  # API request
 budget = query_job.result()  # Waits for query to finish
 budget = budget.to_dataframe()
 budget['Date'] = pd.to_datetime(budget['Date'])
-print(budget.info())
+# print(budget.info())
+
+# reading Ad spend
+QUERY = (
+	'select DISTINCT google_ads_spend, Facebook_ads_spend, bing_ads_spend, snapchat_ads_spend, goaffpro_spend from `aggregated_views.summary_by_day`;'
+)
+query_job = client.query(QUERY)  # API request
+ads_spend = query_job.result()  # Waits for query to finish
+ads_spend = ads_spend.to_dataframe()
+# print("ads_spend",ads_spend.head())
+
+# reading OPEX_2_0
+QUERY = (
+	'select * from `OPEX_2_0.wages`;'
+)
+query_job = client.query(QUERY)  # API request
+wages = query_job.result()  # Waits for query to finish
+wages = wages.to_dataframe()
+# print("wages_timesheet",wages.head())
+
+QUERY = (
+	'select * from `OPEX_2_0.fixed_costs` where category = "wage";' 
+)
+query_job = client.query(QUERY)  # API request
+wages_fixed = query_job.result()  # Waits for query to finish
+wages_fixed = wages_fixed.to_dataframe()
+# print("wages_fixed", wages_fixed.head())
+
+# Platforms
+QUERY = ( 
+	'select * from `OPEX_2_0.fixed_costs` where category = "platform"'
+)
+query_job = client.query(QUERY)  # API request
+platform = query_job.result()  # Waits for query to finish
+platform = platform.to_dataframe()
+# print("platform",platform.head())
+
+# Transactional costs
+QUERY = ( 
+	'select * from `OPEX_2_0.transactional_costs`'
+)
+query_job = client.query(QUERY)  # API request
+Transactional_costs = query_job.result()  # Waits for query to finish
+Transactional_costs = Transactional_costs.to_dataframe()
+# print("Transactional costs",Transactional_costs.head())
 
 # orders.to_csv('orders.csv')
 # budget.to_csv('budget.csv')
@@ -60,7 +104,7 @@ print(budget.info())
 # orders = pd.read_csv('orders.csv')
 # budget = pd.read_csv('budget.csv',parse_dates=['Date'])
 # print(orders)
-print(budget)
+# print(budget)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
@@ -148,13 +192,23 @@ app.layout = html.Div(children=[
 
     	],className='row'),
 
-    dcc.Graph(
-        id='bar-chart',
-    ),
-
-    dcc.Graph(
-        id='cum-line',
-    )
+	html.Div(
+            [
+                html.Div(
+                    [dcc.Graph(id='bar-chart')],
+                    className="pretty_container seven columns",
+                ),
+                html.Div(
+                    [dcc.Graph(id="cum-line")],
+                    className="pretty_container five columns",
+                ),
+            ],
+            className="row flex-display",
+        ),
+	html.Div(
+            [dcc.Graph(id="count_graph")],
+            className="pretty_container",
+        ),
 ])
 
 
@@ -1576,6 +1630,181 @@ def update_output_div(n_clicks):
 		return [0, 0, 0]
 	else:
 		return [0, 0, 0]
+
+
+
+@app.callback(
+	Output(component_id='count_graph', component_property='figure'),
+    [Input(component_id='date-range', component_property='start_date'),
+    Input(component_id='date-range', component_property='end_date'),
+    Input(component_id='group-by-day', component_property='n_clicks'),
+    Input(component_id='group-by-week', component_property='n_clicks'),
+    Input(component_id='group-by-month', component_property='n_clicks'),
+    Input(component_id='channel', component_property='value'),]
+)
+def make_count_figure(start_date, end_date, n_clicks_group_by_day, n_clicks_group_by_week, n_clicks_group_by_month, channel):
+
+   
+	budget_f = budget[(budget.Date <= end_date) & (budget.Date >= start_date)]
+
+	orders_f = orders[(orders.created_at <= end_date) & (orders.created_at >= start_date)]
+
+	# orders_f['sku'] = orders_f.line_items.apply(lambda x: x[0]['value']['sku'])
+	orders_f['sku_channel'] = orders_f['sku'].str[-1]
+
+	orders_f = orders_f.replace({'sku_channel': {'1': 'orders B2C_revenue', '2': 'orders Wholesale_revenue', '3' : 'orders Distributor_revenue'}})
+	orders_f = orders_f.drop_duplicates(subset=['created_at', 'sku_channel', 'total_price_usd'])
+
+	orders_f['Date'] = orders_f['created_at'].dt.date
+
+
+	print(len(orders_f))
+	orders_f = orders_f.groupby(['Date','sku_channel'])[['total_price_usd']].sum().reset_index()
+
+	metas = ['Date']
+
+	orders_f = orders_f.set_index(['sku_channel'] + metas).unstack('sku_channel').total_price_usd.rename_axis([None], axis=1).reset_index()
+	# print(orders_f)
+
+	for col in ['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']:
+		if col not in orders_f.columns:
+			orders_f[col] = 0
+			
+	budget_orders_df = pd.merge(budget_f, orders_f, on='Date', how='outer')
+	budget_orders_df = budget_orders_df.fillna(0)
+	budget_orders_df_cum = budget_orders_df.copy()
+	budget_orders_df_cum.iloc[:, 1:] =  budget_orders_df_cum.iloc[:, 1:].cumsum()
+	# print(budget_orders_df_cum)
+
+	budget_orders_df_cum.loc[budget_orders_df_cum.Date >= dt.now(), ['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']] = np.nan
+
+   
+	return (
+		go.Figure(
+			data=[
+					go.Bar(
+						name="B2C Budget",
+						x=budget_f["Date"],
+						y=budget_f.B2C_revenue,
+						offsetgroup=0,
+						marker_color='lightpink'
+					),
+					go.Bar(
+						name="Wholesale Budget",
+						x=budget_f["Date"],
+						y=budget_f.Wholesale_revenue,
+						offsetgroup=0,
+						base=budget_f['B2C_revenue'],
+						marker_color='lightblue'
+					),
+					go.Bar(
+						name="Distributor Budget",
+						x=budget_f["Date"],
+						y=budget_f.Distributor_revenue,
+						offsetgroup=0,
+						base=budget_f['B2C_revenue'] + budget_f['Wholesale_revenue'],
+						marker_color='lightgreen'
+					),
+					go.Bar(
+						name="B2C",
+						x=orders_f['Date'],
+						y=orders_f['orders B2C_revenue'],
+						offsetgroup=1,
+						marker_color='hotpink',
+						opacity=0.5
+					),
+					go.Bar(
+						name="Wholesale",
+						x=orders_f['Date'],
+						y=orders_f['orders Wholesale_revenue'],
+						offsetgroup=1,
+						base=orders_f['orders B2C_revenue'],
+						marker_color='rgb(50,60,255)',
+						opacity=0.5
+					),
+					go.Bar(
+						name="Distributor",
+						x=orders_f['Date'],
+						y=orders_f['orders Distributor_revenue'],
+						offsetgroup=1,
+						base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
+						marker_color='green',
+						opacity=0.5
+					)
+				],
+				layout=go.Layout(
+					title="Revenue VS Budget",
+					yaxis_title="$ USD",
+					barmode='group',
+					height=500,
+					margin = {
+							't' : 50,
+							'b' : 50}
+				)
+			),
+		)
+			
+
+
+					
+# @app.callback(
+#     Output("aggregate_graph", "figure"),
+#     [
+#         Input("well_statuses", "value"),
+#         Input("well_types", "value"),
+#         Input("year_slider", "value"),
+#         Input("main_graph", "hoverData"),
+#     ],
+# )
+
+# def make_aggregate_figure(well_statuses, well_types, year_slider, main_graph_hover):
+
+#     layout_aggregate = copy.deepcopy(layout)
+
+#     if main_graph_hover is None:
+#         main_graph_hover = {
+#             "points": [
+#                 {"curveNumber": 4, "pointNumber": 569, "customdata": 31101173130000}
+#             ]
+#         }
+
+#     chosen = [point["customdata"] for point in main_graph_hover["points"]]
+#     well_type = dataset[chosen[0]]["Well_Type"]
+#     dff = filter_dataframe(df, well_statuses, well_types, year_slider)
+
+#     selected = dff[dff["Well_Type"] == well_type]["API_WellNo"].values
+#     index, gas, oil, water = produce_aggregate(selected, year_slider)
+
+#     data = [
+#         dict(
+#             type="scatter",
+#             mode="lines",
+#             name="Gas Produced (mcf)",
+#             x=index,
+#             y=gas,
+#             line=dict(shape="spline", smoothing="2", color="#F9ADA0"),
+#         ),
+#         dict(
+#             type="scatter",
+#             mode="lines",
+#             name="Oil Produced (bbl)",
+#             x=index,
+#             y=oil,
+#             line=dict(shape="spline", smoothing="2", color="#849E68"),
+#         ),
+#         dict(
+#             type="scatter",
+#             mode="lines",
+#             name="Water Produced (bbl)",
+#             x=index,
+#             y=water,
+#             line=dict(shape="spline", smoothing="2", color="#59C3C3"),
+#         ),
+#     ]
+#     layout_aggregate["title"] = "Aggregate: " + WELL_TYPES[well_type]
+
+#     figure = dict(data=data, layout=layout_aggregate)
+#     return figure
 
 
 if __name__ == '__main__':
