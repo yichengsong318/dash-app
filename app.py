@@ -26,15 +26,6 @@ credentials = service_account.Credentials.from_service_account_file(
 
 client = bigquery.Client(credentials= credentials,project='data-warehouse-lastobject')
 
-#read wages table
-QUERY = (
-    'select * from `OPEX_2_0.wages`;')
-query_job = client.query(QUERY)  # API request
-wages = query_job.result()  # Waits for query to finish
-wages = wages.to_dataframe()
-# wages['Date'] = pd.to_datetime(wages['Date'])
-print(wages.info())
-
 # reading orders table
 QUERY = (
     'select DISTINCT created_at, total_price_usd, value.sku from `shopify.orders` CROSS JOIN UNNEST(line_items)  where created_at >= "2020-01-01";')
@@ -44,7 +35,6 @@ orders = orders.to_dataframe()
 # print(orders.head())
 
 
-
 # # reading budget table
 QUERY = (
     'select * from `budget.budget_2020`;')
@@ -52,7 +42,7 @@ query_job = client.query(QUERY)  # API request
 budget = query_job.result()  # Waits for query to finish
 budget = budget.to_dataframe()
 budget['Date'] = pd.to_datetime(budget['Date'])
-# print(budget.info())
+# print("budget",budget.head())
 
 # reading Ad spend
 QUERY = (
@@ -61,7 +51,7 @@ QUERY = (
 query_job = client.query(QUERY)  # API request
 ads_spend = query_job.result()  # Waits for query to finish
 ads_spend = ads_spend.to_dataframe()
-# print("ads_spend",ads_spend.head())
+# print("ads_spend",ads_spend.google_ads_spend)
 
 # reading OPEX_2_0
 QUERY = (
@@ -70,23 +60,28 @@ QUERY = (
 query_job = client.query(QUERY)  # API request
 wages = query_job.result()  # Waits for query to finish
 wages = wages.to_dataframe()
+wages['Date'] = pd.to_datetime(wages['Date'])
 # print("wages_timesheet",wages.head())
 
 QUERY = (
-	'select * from `OPEX_2_0.fixed_costs` where category = "wage";' 
+	'select * from `OPEX_2_0.fixed_costs` where category = "Wage";' 
 )
 query_job = client.query(QUERY)  # API request
 wages_fixed = query_job.result()  # Waits for query to finish
 wages_fixed = wages_fixed.to_dataframe()
-# print("wages_fixed", wages_fixed.head())
+wages_fixed['start_date'] = pd.to_datetime(wages_fixed['start_date'])
+wages_fixed['end_date'] = pd.to_datetime(wages_fixed['end_date'])
+# print("wages_fixed", wages_fixed)
 
 # Platforms
 QUERY = ( 
-	'select * from `OPEX_2_0.fixed_costs` where category = "platform"'
+	'select * from `OPEX_2_0.fixed_costs` where category = "Platforms"'
 )
 query_job = client.query(QUERY)  # API request
 platform = query_job.result()  # Waits for query to finish
 platform = platform.to_dataframe()
+platform['start_date'] = pd.to_datetime(platform['start_date'])
+platform['end_date'] = pd.to_datetime(platform['end_date'])
 # print("platform",platform.head())
 
 # Transactional costs
@@ -96,15 +91,8 @@ QUERY = (
 query_job = client.query(QUERY)  # API request
 Transactional_costs = query_job.result()  # Waits for query to finish
 Transactional_costs = Transactional_costs.to_dataframe()
-# print("Transactional costs",Transactional_costs.head())
+print("Transactional costs",Transactional_costs.head())
 
-# orders.to_csv('orders.csv')
-# budget.to_csv('budget.csv')
-
-# orders = pd.read_csv('orders.csv')
-# budget = pd.read_csv('budget.csv',parse_dates=['Date'])
-# print(orders)
-# print(budget)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
@@ -207,7 +195,7 @@ app.layout = html.Div(children=[
         ),
 	html.Div(
             [dcc.Graph(id="count_graph")],
-            className="pretty_container",
+            className="pretty_container ten columns",
         ),
 ])
 
@@ -215,7 +203,8 @@ app.layout = html.Div(children=[
 @app.callback(
     [Output(component_id='control-button-group', component_property='n_clicks'),
     Output(component_id='bar-chart', component_property='figure'),
-    Output(component_id='cum-line', component_property='figure'),],
+    Output(component_id='cum-line', component_property='figure'),
+    Output(component_id='count_graph', component_property='figure'),],
     [Input(component_id='date-range', component_property='start_date'),
     Input(component_id='date-range', component_property='end_date'),
     Input(component_id='group-by-day', component_property='n_clicks'),
@@ -225,25 +214,34 @@ app.layout = html.Div(children=[
 )
 def update_output_div(start_date, end_date, n_clicks_group_by_day, n_clicks_group_by_week, n_clicks_group_by_month, channel):
 	budget_f = budget[(budget.Date <= end_date) & (budget.Date >= start_date)]
-
+	# print("budget", budget_f)
 	orders_f = orders[(orders.created_at <= end_date) & (orders.created_at >= start_date)]
+	
+	wages_f = wages[(wages.Date <= end_date) & (wages.Date >= start_date)]
+	print('wages_f',wages_f)
+	wages_f = wages_f.sum(axis = 1, skipna = True) 
+	print('wage',wages_f)
+	wages_fixed_f = wages_fixed[(wages_fixed.start_date <= end_date) & (wages_fixed.start_date >= start_date)]
 
+	wages_fixed_end_f = wages_fixed_f[(wages_fixed_f.end_date <= end_date)]
+
+	platform_f = platform[(platform.start_date <= end_date) & (platform.start_date >= start_date)]
+	
+	# print("platform_f", platform_f)
 	# orders_f['sku'] = orders_f.line_items.apply(lambda x: x[0]['value']['sku'])
 	orders_f['sku_channel'] = orders_f['sku'].str[-1]
-
+	
 	orders_f = orders_f.replace({'sku_channel': {'1': 'orders B2C_revenue', '2': 'orders Wholesale_revenue', '3' : 'orders Distributor_revenue'}})
+	
 	orders_f = orders_f.drop_duplicates(subset=['created_at', 'sku_channel', 'total_price_usd'])
 	
 	orders_f['Date'] = orders_f['created_at'].dt.date
 
-
-	print(len(orders_f))
 	orders_f = orders_f.groupby(['Date','sku_channel'])[['total_price_usd']].sum().reset_index()
 
 	metas = ['Date']
 
 	orders_f = orders_f.set_index(['sku_channel'] + metas).unstack('sku_channel').total_price_usd.rename_axis([None], axis=1).reset_index()
-	# print(orders_f)
 
 	for col in ['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']:
 		if col not in orders_f.columns:
@@ -259,325 +257,7 @@ def update_output_div(start_date, end_date, n_clicks_group_by_day, n_clicks_grou
 
 
 	if n_clicks_group_by_day:
-		if channel == 'All':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-							            offsetgroup=0,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-							            offsetgroup=0,
-							            base=budget_f['B2C_revenue'],
-									    marker_color='lightblue'
-							        ),
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-							            offsetgroup=0,
-							            base=budget_f['B2C_revenue'] + budget_f['Wholesale_revenue'],
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-							            offsetgroup=1,
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-							            offsetgroup=1,
-							            base=orders_f['orders B2C_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5
-							        ),
-							        go.Bar(
-							            name="Distributor",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Distributor_revenue'],
-							            offsetgroup=1,
-							            base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
-									    marker_color='green',
-									    opacity=0.5
-							        )
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'B2C_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								),],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Wholesale_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-									    marker_color='lightblue',
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5,
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Distributor_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
-							            name="Distributor",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Distributor_revenue'],
-									    marker_color='green',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-
+		return makechart(channel, budget_f, orders_f, budget_orders_df_cum, wages_f)
 
 	elif n_clicks_group_by_week:
 
@@ -588,328 +268,13 @@ def update_output_div(start_date, end_date, n_clicks_group_by_day, n_clicks_grou
 		orders_f['Date'] = orders_f.Date.apply(lambda x: x.strftime("%V"))
 
 		orders_f = orders_f.groupby('Date')[['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']].sum().reset_index()
-		# print(orders_f)
 
+		wages_f['Date'] = wages_f.Date.apply(lambda x: x.strftime("%V"))
 
-		if channel == 'All':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-							            offsetgroup=0,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-							            offsetgroup=0,
-							            base=budget_f['B2C_revenue'],
-									    marker_color='lightblue'
-							        ),
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-							            offsetgroup=0,
-							            base=budget_f['B2C_revenue'] + budget_f['Wholesale_revenue'],
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-							            offsetgroup=1,
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-							            offsetgroup=1,
-							            base=orders_f['orders B2C_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5
-							        ),
-							        go.Bar(
-							            name="Distributor",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Distributor_revenue'],
-							            offsetgroup=1,
-							            base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
-									    marker_color='green',
-									    opacity=0.5
-							        )
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'B2C_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Wholesale_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-									    marker_color='lightblue'
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Distributor_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
-							            name="Distributor",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Distributor_revenue'],
-									    marker_color='green',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-
+		wages_f = wages_f.groupby('Date').sum().reset_index()
+ 
+		return makechart(channel, budget_f, orders_f, budget_orders_df_cum, wages_f)
+		
 	elif n_clicks_group_by_month:
 
 		budget_f['Date'] = budget_f.Date.apply(lambda x: x.month)
@@ -919,330 +284,14 @@ def update_output_div(start_date, end_date, n_clicks_group_by_day, n_clicks_grou
 		orders_f['Date'] = orders_f.Date.apply(lambda x: x.month)
 
 		orders_f = orders_f.groupby('Date')[['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']].sum().reset_index()
-		# print(orders_f)
 
+		return makechart(channel, budget_f, orders_f, budget_orders_df_cum, wages_f)
 
-		if channel == 'All':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-							            offsetgroup=0,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-							            offsetgroup=0,
-							            base=budget_f['B2C_revenue'],
-									    marker_color='lightblue'
-							        ),
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-							            offsetgroup=0,
-							            base=budget_f['B2C_revenue'] + budget_f['Wholesale_revenue'],
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-							            offsetgroup=1,
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-							            offsetgroup=1,
-							            base=orders_f['orders B2C_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5
-							        ),
-							        go.Bar(
-							            name="Distributor",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Distributor_revenue'],
-							            offsetgroup=1,
-							            base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
-									    marker_color='green',
-									    opacity=0.5
-							        )
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'B2C_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								),],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Wholesale_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-									    marker_color='lightblue'
-
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Distributor_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
-							            name="Distributor",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Distributor_revenue'],
-									    marker_color='green',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
-								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
 	else:
-		if channel == 'All':
+		return makechart(channel, budget_f, orders_f, budget_orders_df_cum, wages_f)
+
+def makechart(channel, budget_f, orders_f, budget_orders_df_cum, wages_f):
+	if channel == 'All':
 			return [1, go.Figure(
 							    data=[
 							        go.Bar(
@@ -1371,195 +420,341 @@ def update_output_div(start_date, end_date, n_clicks_group_by_day, n_clicks_grou
 							        yaxis_title="$ USD",
 							        barmode='group',
 							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
 
-								 )]
-		elif channel == 'B2C_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="B2C Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.B2C_revenue,
-									    marker_color='lightpink'
-							        ),
-							        go.Bar(
-							            name="B2C",
-							            x=orders_f['Date'],
-							            y=orders_f['orders B2C_revenue'],
-									    marker_color='hotpink',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
 							    )
 							),
-
-
 						go.Figure(
-							    data=[
-
-							    go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
-						            name="B2C Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    line=dict(width=2, color='lightpink'),
-								    fillcolor='rgba(255,255,255,0)',
-								    stackgroup='two' # define stack group
+							data=[
+								go.Bar(
+									name="B2C",
+									x=orders_f['Date'],
+									y=orders_f['orders B2C_revenue'],
+									offsetgroup=100,
+									marker_color='darkgreen',
+									opacity=0.5
 								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
-						            name="B2C",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(255,105,180,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Wholesale_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Wholesale Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Wholesale_revenue,
-									    marker_color='lightblue'
-							        ),
-							        go.Bar(
-							            name="Wholesale",
-							            x=orders_f['Date'],
-							            y=orders_f['orders Wholesale_revenue'],
-									    marker_color='rgb(50,60,255)',
-									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
-						            name="Wholesale Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightblue'),
-								    stackgroup='two'
+								go.Bar(
+									name="Wholesale",
+									x=orders_f['Date'],
+									y=orders_f['orders Wholesale_revenue'],
+									offsetgroup=100,
+									base=orders_f['orders B2C_revenue'],
+									marker_color='seagreen',
+									opacity=0.5
 								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
-						            name="Wholesale",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5,
-									    color='rgba(50,60,255,0.5)'),
-								    stackgroup='one'
-								),],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
-
-								 )]
-		elif channel == 'Distributor_revenue':
-			return [1, go.Figure(
-							    data=[
-							        go.Bar(
-							            name="Distributor Budget",
-							            x=budget_f["Date"],
-							            y=budget_f.Distributor_revenue,
-									    marker_color='lightgreen'
-							        ),
-							        go.Bar(
+								go.Bar(
 							            name="Distributor",
 							            x=orders_f['Date'],
 							            y=orders_f['orders Distributor_revenue'],
-									    marker_color='green',
+							            offsetgroup=1,
+							            base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
+									    marker_color='lightgreen',
 									    opacity=0.5
-							        ),
-							    ],
-							    layout=go.Layout(
-							        title="Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        margin = {
-	                            			't' : 50,
-	                            			'b' : 50}
-							    )
-							),
-
-
-						go.Figure(
-							    data=[
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
-						            name="Distributor Budget",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    fill=None,
-								    fillcolor='rgba(255,255,255,0)',
-								    line=dict(width=2, color='lightgreen'),
-								    stackgroup='two'
+							    ),
+								go.Bar(
+									name="Ad Spend",
+									x=orders_f['Date'],
+									y=orders_f['orders Distributor_revenue'],
+									offsetgroup=100,
+									base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
+									marker_color='pink',
+									opacity=0.5
 								),
-								 go.Scatter(
-								    x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
-						            name="Distributor",
-								    hoverinfo='x+y',
-								    mode='lines',
-								    line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
-								    stackgroup='one'
-								)],
-							    layout=go.Layout(
-							        title="Cumulative Revenue VS Budget",
-							        yaxis_title="$ USD",
-							        barmode='group',
-							        height=500,
-							        # margin = {
-	              #               			't' : 50,
-	              #               			'b' : 50}
-							    )
+								go.Bar(
+									name="wages",
+									x=orders_f['Date'],
+									y=orders_f['orders B2C_revenue'],
+									offsetgroup=100,
+									marker_color='indianred',
+									opacity=0.5
+								),
+								go.Bar(
+									name="Platforms",
+									x=orders_f['Date'],
+									y=orders_f['orders Wholesale_revenue'],
+									offsetgroup=100,
+									base=orders_f['orders B2C_revenue'],
+									marker_color='crimson',
+									opacity=0.5
+								),
+								go.Bar(
+									name="Unit cost",
+									x=orders_f['Date'],
+									y=orders_f['orders Distributor_revenue'],
+									offsetgroup=100,
+									base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
+									marker_color='darkred',
+									opacity=0.5
+								)
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+						),
+					]
+	elif channel == 'B2C_revenue':
+		return [1, go.Figure(
+							data=[
+								go.Bar(
+									name="B2C Budget",
+									x=budget_f["Date"],
+									y=budget_f.B2C_revenue,
+									marker_color='lightpink'
+								),
+								go.Bar(
+									name="B2C",
+									x=orders_f['Date'],
+									y=orders_f['orders B2C_revenue'],
+									marker_color='hotpink',
+									opacity=0.5
+								),
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+						),
 
-								 )]
+
+					go.Figure(
+							data=[
+
+							go.Scatter(
+								x=budget_orders_df_cum.Date, y=budget_orders_df_cum['B2C_revenue'],
+								name="B2C Budget",
+								hoverinfo='x+y',
+								mode='lines',
+								fill=None,
+								line=dict(width=2, color='lightpink'),
+								fillcolor='rgba(255,255,255,0)',
+								stackgroup='two' # define stack group
+							),
+								go.Scatter(
+								x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders B2C_revenue'],
+								name="B2C",
+								hoverinfo='x+y',
+								mode='lines',
+								line=dict(width=0.5,
+									color='rgba(255,105,180,0.5)',),
+								stackgroup='one'
+							),],
+							layout=go.Layout(
+								title="Cumulative Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+							)
+
+					),
+					go.Figure(
+							data=[
+								go.Bar(
+									name="B2C Budget",
+									x=budget_f["Date"],
+									y=budget_f.B2C_revenue,
+									marker_color='lightpink'
+								),
+								go.Bar(
+									name="B2C",
+									x=orders_f['Date'],
+									y=orders_f['orders B2C_revenue'],
+									marker_color='hotpink',
+									opacity=0.5
+								),
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+					),
+				]
+	elif channel == 'Wholesale_revenue':
+		return [1, go.Figure(
+							data=[
+								go.Bar(
+									name="Wholesale Budget",
+									x=budget_f["Date"],
+									y=budget_f.Wholesale_revenue,
+									marker_color='lightblue',
+								),
+								go.Bar(
+									name="Wholesale",
+									x=orders_f['Date'],
+									y=orders_f['orders Wholesale_revenue'],
+									marker_color='rgb(50,60,255)',
+									opacity=0.5,
+								),
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+						),
+
+
+					go.Figure(
+							data=[
+								go.Scatter(
+								x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Wholesale_revenue'],
+								name="Wholesale Budget",
+								hoverinfo='x+y',
+								mode='lines',
+								fill=None,
+								fillcolor='rgba(255,255,255,0)',
+								line=dict(width=2, color='lightblue'),
+								stackgroup='two'
+							),
+								go.Scatter(
+								x=budget_orders_df_cum.Date, y=budget_orders_df_cum[ 'orders Wholesale_revenue'],
+								name="Wholesale",
+								hoverinfo='x+y',
+								mode='lines',
+								line=dict(width=0.5,
+									color='rgba(50,60,255,0.5)'),
+								stackgroup='one'
+							)],
+							layout=go.Layout(
+								title="Cumulative Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+
+							)
+
+						),
+					go.Figure(
+							data=[
+								go.Bar(
+									name="Wholesale Budget",
+									x=budget_f["Date"],
+									y=budget_f.Wholesale_revenue,
+									marker_color='lightblue',
+								),
+								go.Bar(
+									name="Wholesale",
+									x=orders_f['Date'],
+									y=orders_f['orders Wholesale_revenue'],
+									marker_color='rgb(50,60,255)',
+									opacity=0.5,
+								),
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+						),
+					]
+	elif channel == 'Distributor_revenue':
+		return [1, go.Figure(
+							data=[
+								go.Bar(
+									name="Distributor Budget",
+									x=budget_f["Date"],
+									y=budget_f.Distributor_revenue,
+									marker_color='lightgreen'
+								),
+								go.Bar(
+									name="Distributor",
+									x=orders_f['Date'],
+									y=orders_f['orders Distributor_revenue'],
+									marker_color='green',
+									opacity=0.5
+								),
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+						),
+
+
+					go.Figure(
+							data=[
+								go.Scatter(
+								x=budget_orders_df_cum.Date, y=budget_orders_df_cum['Distributor_revenue'],
+								name="Distributor Budget",
+								hoverinfo='x+y',
+								mode='lines',
+								fill=None,
+								fillcolor='rgba(255,255,255,0)',
+								line=dict(width=2, color='lightgreen'),
+								stackgroup='two'
+							),
+								go.Scatter(
+								x=budget_orders_df_cum.Date, y=budget_orders_df_cum['orders Distributor_revenue'],
+								name="Distributor",
+								hoverinfo='x+y',
+								mode='lines',
+								line=dict(width=0.5, color='rgba(0,255,0,0.5)',),
+								stackgroup='one'
+							)],
+							layout=go.Layout(
+								title="Cumulative Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+
+							)
+
+						),
+						go.Figure(
+							data=[
+								go.Bar(
+									name="Distributor Budget",
+									x=budget_f["Date"],
+									y=budget_f.Distributor_revenue,
+									marker_color='lightgreen'
+								),
+								go.Bar(
+									name="Distributor",
+									x=orders_f['Date'],
+									y=orders_f['orders Distributor_revenue'],
+									marker_color='green',
+									opacity=0.5
+								),
+							],
+							layout=go.Layout(
+								title="Revenue VS Budget",
+								yaxis_title="$ USD",
+								barmode='group',
+								height=500,
+								margin = {
+										't' : 50,
+										'b' : 50}
+							)
+						),
+					]
 
 
 @app.callback(
@@ -1632,179 +827,6 @@ def update_output_div(n_clicks):
 		return [0, 0, 0]
 
 
-
-@app.callback(
-	Output(component_id='count_graph', component_property='figure'),
-    [Input(component_id='date-range', component_property='start_date'),
-    Input(component_id='date-range', component_property='end_date'),
-    Input(component_id='group-by-day', component_property='n_clicks'),
-    Input(component_id='group-by-week', component_property='n_clicks'),
-    Input(component_id='group-by-month', component_property='n_clicks'),
-    Input(component_id='channel', component_property='value'),]
-)
-def make_count_figure(start_date, end_date, n_clicks_group_by_day, n_clicks_group_by_week, n_clicks_group_by_month, channel):
-
-   
-	budget_f = budget[(budget.Date <= end_date) & (budget.Date >= start_date)]
-
-	orders_f = orders[(orders.created_at <= end_date) & (orders.created_at >= start_date)]
-
-	# orders_f['sku'] = orders_f.line_items.apply(lambda x: x[0]['value']['sku'])
-	orders_f['sku_channel'] = orders_f['sku'].str[-1]
-
-	orders_f = orders_f.replace({'sku_channel': {'1': 'orders B2C_revenue', '2': 'orders Wholesale_revenue', '3' : 'orders Distributor_revenue'}})
-	orders_f = orders_f.drop_duplicates(subset=['created_at', 'sku_channel', 'total_price_usd'])
-
-	orders_f['Date'] = orders_f['created_at'].dt.date
-
-
-	print(len(orders_f))
-	orders_f = orders_f.groupby(['Date','sku_channel'])[['total_price_usd']].sum().reset_index()
-
-	metas = ['Date']
-
-	orders_f = orders_f.set_index(['sku_channel'] + metas).unstack('sku_channel').total_price_usd.rename_axis([None], axis=1).reset_index()
-	# print(orders_f)
-
-	for col in ['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']:
-		if col not in orders_f.columns:
-			orders_f[col] = 0
-			
-	budget_orders_df = pd.merge(budget_f, orders_f, on='Date', how='outer')
-	budget_orders_df = budget_orders_df.fillna(0)
-	budget_orders_df_cum = budget_orders_df.copy()
-	budget_orders_df_cum.iloc[:, 1:] =  budget_orders_df_cum.iloc[:, 1:].cumsum()
-	# print(budget_orders_df_cum)
-
-	budget_orders_df_cum.loc[budget_orders_df_cum.Date >= dt.now(), ['orders B2C_revenue', 'orders Wholesale_revenue', 'orders Distributor_revenue']] = np.nan
-
-   
-	return (
-		go.Figure(
-			data=[
-					go.Bar(
-						name="B2C Budget",
-						x=budget_f["Date"],
-						y=budget_f.B2C_revenue,
-						offsetgroup=0,
-						marker_color='lightpink'
-					),
-					go.Bar(
-						name="Wholesale Budget",
-						x=budget_f["Date"],
-						y=budget_f.Wholesale_revenue,
-						offsetgroup=0,
-						base=budget_f['B2C_revenue'],
-						marker_color='lightblue'
-					),
-					go.Bar(
-						name="Distributor Budget",
-						x=budget_f["Date"],
-						y=budget_f.Distributor_revenue,
-						offsetgroup=0,
-						base=budget_f['B2C_revenue'] + budget_f['Wholesale_revenue'],
-						marker_color='lightgreen'
-					),
-					go.Bar(
-						name="B2C",
-						x=orders_f['Date'],
-						y=orders_f['orders B2C_revenue'],
-						offsetgroup=1,
-						marker_color='hotpink',
-						opacity=0.5
-					),
-					go.Bar(
-						name="Wholesale",
-						x=orders_f['Date'],
-						y=orders_f['orders Wholesale_revenue'],
-						offsetgroup=1,
-						base=orders_f['orders B2C_revenue'],
-						marker_color='rgb(50,60,255)',
-						opacity=0.5
-					),
-					go.Bar(
-						name="Distributor",
-						x=orders_f['Date'],
-						y=orders_f['orders Distributor_revenue'],
-						offsetgroup=1,
-						base=orders_f['orders B2C_revenue'] + orders_f['orders Wholesale_revenue'],
-						marker_color='green',
-						opacity=0.5
-					)
-				],
-				layout=go.Layout(
-					title="Revenue VS Budget",
-					yaxis_title="$ USD",
-					barmode='group',
-					height=500,
-					margin = {
-							't' : 50,
-							'b' : 50}
-				)
-			),
-		)
-			
-
-
-					
-# @app.callback(
-#     Output("aggregate_graph", "figure"),
-#     [
-#         Input("well_statuses", "value"),
-#         Input("well_types", "value"),
-#         Input("year_slider", "value"),
-#         Input("main_graph", "hoverData"),
-#     ],
-# )
-
-# def make_aggregate_figure(well_statuses, well_types, year_slider, main_graph_hover):
-
-#     layout_aggregate = copy.deepcopy(layout)
-
-#     if main_graph_hover is None:
-#         main_graph_hover = {
-#             "points": [
-#                 {"curveNumber": 4, "pointNumber": 569, "customdata": 31101173130000}
-#             ]
-#         }
-
-#     chosen = [point["customdata"] for point in main_graph_hover["points"]]
-#     well_type = dataset[chosen[0]]["Well_Type"]
-#     dff = filter_dataframe(df, well_statuses, well_types, year_slider)
-
-#     selected = dff[dff["Well_Type"] == well_type]["API_WellNo"].values
-#     index, gas, oil, water = produce_aggregate(selected, year_slider)
-
-#     data = [
-#         dict(
-#             type="scatter",
-#             mode="lines",
-#             name="Gas Produced (mcf)",
-#             x=index,
-#             y=gas,
-#             line=dict(shape="spline", smoothing="2", color="#F9ADA0"),
-#         ),
-#         dict(
-#             type="scatter",
-#             mode="lines",
-#             name="Oil Produced (bbl)",
-#             x=index,
-#             y=oil,
-#             line=dict(shape="spline", smoothing="2", color="#849E68"),
-#         ),
-#         dict(
-#             type="scatter",
-#             mode="lines",
-#             name="Water Produced (bbl)",
-#             x=index,
-#             y=water,
-#             line=dict(shape="spline", smoothing="2", color="#59C3C3"),
-#         ),
-#     ]
-#     layout_aggregate["title"] = "Aggregate: " + WELL_TYPES[well_type]
-
-#     figure = dict(data=data, layout=layout_aggregate)
-#     return figure
 
 
 if __name__ == '__main__':
