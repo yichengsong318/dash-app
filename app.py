@@ -51,7 +51,7 @@ QUERY = (
 query_job = client.query(QUERY)  # API request
 ads_spend = query_job.result()  # Waits for query to finish
 ads_spend = ads_spend.to_dataframe()
-# print("ads_spend",ads_spend.google_ads_spend)
+print("ads_spend",ads_spend.google_ads_spend)
 
 # reading OPEX_2_0
 QUERY = (
@@ -218,9 +218,8 @@ def update_output_div(start_date, end_date, n_clicks_group_by_day, n_clicks_grou
 	orders_f = orders[(orders.created_at <= end_date) & (orders.created_at >= start_date)]
 	
 	wages_f = wages[(wages.Date <= end_date) & (wages.Date >= start_date)]
-	print('wages_f',wages_f)
-	wages_f = wages_f.sum(axis = 1, skipna = True) 
-	print('wage',wages_f)
+	
+	
 	wages_fixed_f = wages_fixed[(wages_fixed.start_date <= end_date) & (wages_fixed.start_date >= start_date)]
 
 	wages_fixed_end_f = wages_fixed_f[(wages_fixed_f.end_date <= end_date)]
